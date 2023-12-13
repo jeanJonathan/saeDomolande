@@ -22,8 +22,8 @@
 # Surveillance de l'utilisation du CPU : https://linuxconfig.org/bash-script-to-monitor-cpu-and-memory-usage-on-linux
 #https://unix.stackexchange.com/questions/69167/bash-script-that-print-cpu-usage-diskusage-ram-usage
 #Lecture et écriture des registres MSR spécifiques au modèle : https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/best-practices/reading-writing-msrs-in-linux.html#:~:text=Model,or%20toggling%20specific%20CPU%20features
-https://www.man7.org/linux/man-pages/man4/msr.4.html#:~:text=DESCRIPTION%20top%20%2Fdev%2Fcpu%2FCPUNUM%2Fmsr%20provides%20an,as%20listed%20in%20%2Fproc%2Fcpuinfo
-https://linux.die.net/man/4/msr
+#https://www.man7.org/linux/man-pages/man4/msr.4.html#:~:text=DESCRIPTION%20top%20%2Fdev%2Fcpu%2FCPUNUM%2Fmsr%20provides%20an,as%20listed%20in%20%2Fproc%2Fcpuinfo
+#https://linux.die.net/man/4/msr
 #Gestion et surveillance de la consommation d'énergie: https://linuxconfig.org/how-to-check-and-tune-power-consumption-with-powertop-on-linux
 #Participation à amélioration de ce script : https://chat.openai.com/
 #================================================================
