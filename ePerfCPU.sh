@@ -1,5 +1,25 @@
 #!/bin/bash
 
+# ================================================================
+# Auteur : KOFFI
+# Date de création : 4/12/2023
+# 
+# Description :
+# Ce script Bash est conçu pour mesurer la consommation d'énergie 
+# et la puissance moyenne d'un processus spécifique sur un système 
+# Unbutu Linux. Il utilise des informations sur la fréquence, la tension 
+# du CPU et l'utilisation du CPU pour calculer ces mesures.
+#
+# Utilisation :
+# ./ePerfCPUjj.sh -p [PID du processus] -t [Durée de la fenêtre de surveillance en millisecondes]
+# Exemple : ./ePerfCPUjj.sh -p 1234 -t 1000
+#
+# Remarques :
+# Assurez-vous que le module 'msr' est chargé pour lire les registres MSR.
+# Le script nécessite des privilèges sudo pour accéder à certains registres.
+# ================================================================
+
+
 pid=0
 windowTime=0
 
