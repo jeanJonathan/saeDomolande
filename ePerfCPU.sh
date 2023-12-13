@@ -6,7 +6,7 @@
 # 
 # Description :
 # Ce script est conçu pour mesurer la consommation d'énergie 
-# et la puissance moyenne d'un processus spécifique sur la distribution 
+# et la puissance moyenne du CPU d'un processus spécifique sur la distribution 
 # Unbutu de Linux. Il utilise des informations sur la fréquence, la tension 
 # du CPU et l'utilisation du CPU pour calculer ces mesures.
 #
