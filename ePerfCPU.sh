@@ -1,23 +1,32 @@
 #!/bin/bash
 
 # ================================================================
-# Auteur : KOFFI
+# Auteur : jean-jonathan K
 # Date de création : 4/12/2023
 # 
 # Description :
-# Ce script Bash est conçu pour mesurer la consommation d'énergie 
-# et la puissance moyenne d'un processus spécifique sur un système 
-# Unbutu Linux. Il utilise des informations sur la fréquence, la tension 
+# Ce script est conçu pour mesurer la consommation d'énergie 
+# et la puissance moyenne d'un processus spécifique sur la distribution 
+# Unbutu de Linux. Il utilise des informations sur la fréquence, la tension 
 # du CPU et l'utilisation du CPU pour calculer ces mesures.
 #
 # Utilisation :
-# ./ePerfCPUjj.sh -p [PID du processus] -t [Durée de la fenêtre de surveillance en millisecondes]
-# Exemple : ./ePerfCPUjj.sh -p 1234 -t 1000
+# ./ePerfCPU.sh -p [PID du processus] -t [Durée fenêtre de surveillance en millisecondes]
+# Exemple : ./ePerfCPU.sh -p 1234 -t 1000
 #
 # Remarques :
 # Assurez-vous que le module 'msr' est chargé pour lire les registres MSR.
 # Le script nécessite des privilèges sudo pour accéder à certains registres.
-# ================================================================
+#
+# Quel ques liens sources : 
+# Surveillance de l'utilisation du CPU : https://linuxconfig.org/bash-script-to-monitor-cpu-and-memory-usage-on-linux
+#https://unix.stackexchange.com/questions/69167/bash-script-that-print-cpu-usage-diskusage-ram-usage
+#Lecture et écriture des registres MSR spécifiques au modèle : https://www.intel.com/content/www/us/en/developer/articles/technical/software-security-guidance/best-practices/reading-writing-msrs-in-linux.html#:~:text=Model,or%20toggling%20specific%20CPU%20features
+https://www.man7.org/linux/man-pages/man4/msr.4.html#:~:text=DESCRIPTION%20top%20%2Fdev%2Fcpu%2FCPUNUM%2Fmsr%20provides%20an,as%20listed%20in%20%2Fproc%2Fcpuinfo
+https://linux.die.net/man/4/msr
+#Gestion et surveillance de la consommation d'énergie: https://linuxconfig.org/how-to-check-and-tune-power-consumption-with-powertop-on-linux
+#Participation à amélioration de ce script : https://chat.openai.com/
+#================================================================
 
 
 pid=0
@@ -48,7 +57,7 @@ get_cpu_voltage() {
     local voltage
     voltage=$(echo "scale=3; $msr_voltage / 8192" | bc)
 
-    # On ajoute un zéro devant si le nombre commence par un point
+    # On ajoute un zéro devant si le nombre commence par un point car la syntaxe bash par defaut pour les decimaux est .8 pour 0.8
     if [[ $voltage == .* ]]; then
         voltage="0$voltage"
     fi
@@ -58,7 +67,7 @@ get_cpu_voltage() {
 
 #Fonction qui Récupère le pourcentage d'utilisation du CPU pour le processus spécifié par son PID 
 get_cpu_usage() {
-    #retourne la premiere valeur de l'utilisation pour le thread actif
+    #on retourne la premiere valeur de l'utilisation pour le thread actif
     ps -L -p "$pid" -o pcpu --no-headers | awk '$1 > 0 {print $1; exit}'
 }
 #Fonction pour gerer les options de la ligne de commande duree de surveillance avec wnidowTime par exp
@@ -74,7 +83,7 @@ getInput() {
 }
 
 #Fonction pour calculer la consommation d'énergie du processus spécifié en multipliant l'utilisation du CPU, 
-#la fréquence et la tension, puis en moyennant ces valeurs sur la période spécifiée
+#la fréquence et la tension, puis en moyennant ces valeurs sur la période spécifiée 
 getCPUCons() {
     cpu_freq=$(get_cpu_frequency)
     cpu_voltage=$(get_cpu_voltage)
@@ -91,16 +100,15 @@ getCPUCons() {
 
     while [ $(date +%s%N) -lt $end ]; do
         cpu_usage=$(get_cpu_usage)
-        echo "CPU Usage: $cpu_usage"
+        echo "CPU Usage: $cpu_usage %"
 
         if [[ $cpu_usage != "0" ]]; then
             total_PID_power=$(echo "scale=10; $cpu_usage * $cpu_freq * $cpu_voltage" | sed 's/,/./g' | bc -l)
     
-	    # Ajoute un zéro devant si le nombre commence par un point
 	    if [[ $total_PID_power == .* ]]; then
 		total_PID_power="0$total_PID_power"
 	    fi
-            echo "Total PID Power: $total_PID_power"
+            echo "Total PID Power: $total_PID_power W"
 
             if [ -z "$total_PID_power" ]; then
                 echo "Error in calculating power"; exit 1
@@ -143,8 +151,8 @@ verifyInput() {
 #Fonction pour Afficher l'énergie consommée et la puissance moyenne
 verifyPrintOutput() {
     if [[ ! -z $cpu_energy ]] && [[ $cpu_energy =~ ^[0-9]*([.][0-9]+)?$ ]] && [[ ! -z $cpu_power_AVG ]] && [[ $cpu_power_AVG =~ ^[0-9]*([.][0-9]+)?$ ]]; then
-        echo "cpu_energy_J: $cpu_energy"
-        echo "cpu_avgPower_W: $cpu_power_AVG"
+        echo "cpu_energy_J: $cpu_energy J"
+        echo "cpu_avgPower_W: $cpu_power_AVG W"
     else
         echo "error somewhere"
     fi
