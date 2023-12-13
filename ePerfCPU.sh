@@ -10,6 +10,7 @@ cpu_power_AVG=0
 get_cpu_frequency() {
     awk '/cpu MHz/ {freq_sum += $4; count++} END {print freq_sum / count / 1000}' /proc/cpuinfo
 }
+
 #Fonction qui lit et reccupere la tension du processeur à partir des registres MSR 
 get_cpu_voltage() {
     # On s'assure d'abord que le module 'msr' est chargé
@@ -26,6 +27,11 @@ get_cpu_voltage() {
     # Conversion en volts
     local voltage
     voltage=$(echo "scale=3; $msr_voltage / 8192" | bc)
+
+    # On ajoute un zéro devant si le nombre commence par un point
+    if [[ $voltage == .* ]]; then
+        voltage="0$voltage"
+    fi
 
     echo $voltage
 }
@@ -46,13 +52,14 @@ getInput() {
         esac
     done
 }
+
 #Fonction pour calculer la consommation d'énergie du processus spécifié en multipliant l'utilisation du CPU, 
 #la fréquence et la tension, puis en moyennant ces valeurs sur la période spécifiée
 getCPUCons() {
     cpu_freq=$(get_cpu_frequency)
     cpu_voltage=$(get_cpu_voltage)
 
-    echo "Frequency: $cpu_freq GHz, Voltage: $cpu_voltage V"
+    echo "Frequency: $cpu_freq GHz. Voltage: $cpu_voltage V"
 
     if [ -z "$cpu_freq" ] || [ -z "$cpu_voltage" ] || [ "$cpu_voltage" == "N/A" ]; then
         echo "Error in fetching CPU frequency or voltage"; exit 1
@@ -68,7 +75,11 @@ getCPUCons() {
 
         if [[ $cpu_usage != "0" ]]; then
             total_PID_power=$(echo "scale=10; $cpu_usage * $cpu_freq * $cpu_voltage" | sed 's/,/./g' | bc -l)
-
+    
+	    # Ajoute un zéro devant si le nombre commence par un point
+	    if [[ $total_PID_power == .* ]]; then
+		total_PID_power="0$total_PID_power"
+	    fi
             echo "Total PID Power: $total_PID_power"
 
             if [ -z "$total_PID_power" ]; then
@@ -87,6 +98,15 @@ getCPUCons() {
 
     cpu_power_AVG=$(echo "scale=10; $accumulated_PID_power / $counter" | bc -l)
     cpu_energy=$(echo "scale=10; $cpu_power_AVG * $windowTime * 0.001" | bc -l)
+    
+    if [[ $cpu_power_AVG == .* ]]; then
+	  cpu_power_AVG="0$cpu_power_AVG"
+    fi
+
+    if [[ $cpu_energy == .* ]]; then
+	cpu_energy="0$cpu_energy"
+    fi	
+
 }
 
 #Fonction pour verifier et valider les entrees de windowTime et pid
