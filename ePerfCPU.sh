@@ -38,7 +38,7 @@ cpu_power_AVG=0
 # On calcule la fréquence moyenne du processeur en lisant /proc/cpuinfo.
 
 get_process_name() {
-    local pid=$1
+    pid=$1
     process_name=$(ps -p $pid -o comm=)
     echo $process_name
 }
@@ -64,11 +64,9 @@ get_cpu_voltage() {
 
     # On lire la tension à partir des registres MSR
     # Rmq: l'adresse du registre MSR peut varier selon le processeur
-    local msr_voltage
     msr_voltage=$(sudo rdmsr -f 47:32 -d 0x198)
 
     # Conversion en volts
-    local voltage
     voltage=$(echo "scale=3; $msr_voltage / 8192" | bc)
 
     # On ajoute un zéro devant si le nombre commence par un point car la syntaxe bash par defaut pour les decimaux est .8 pour 0.8
@@ -106,7 +104,7 @@ get_cpu_tdp() {
         tdp_watts=$(echo "$tdp_data" | awk '{print $1/1000000}')
         echo $tdp_watts 
     elif [[ $cpu_name == *"AMD"* ]]; then
-        # Placeholder pour les CPU AMD - à compléter...
+        # Placeholder pour les CPU AMD - à voir plustard...
         echo "AMD CPU detected -"
     else
         # Placeholder pour les autres types de CPU...
