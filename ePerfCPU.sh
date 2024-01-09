@@ -79,8 +79,39 @@ get_cpu_voltage() {
 
 #Fonction qui Récupère le pourcentage d'utilisation du CPU pour le processus spécifié par son PID 
 get_cpu_usage() {
-    #on retourne la premiere valeur de l'utilisation pour le thread actif
-    ps -L -p "$pid" -o pcpu --no-headers | awk '$1 > 0 {print $1; exit}'
+    if [ -z "$pid" ]; then
+        echo "PID is required"
+        return 1
+    fi
+
+    stat_file="/proc/$pid/stat"
+    if [ ! -f "$stat_file" ]; then
+        echo "Process with PID $pid not found"
+        return 1
+    fi
+
+    # On obtient la valeur de HZ
+    hz=$(getconf CLK_TCK)
+
+    # Lecture initiale des temps CPU
+    stat_content1=$(<"$stat_file")
+    utime1=$(echo "$stat_content1" | awk '{print $14}')
+    stime1=$(echo "$stat_content1" | awk '{print $15}')
+
+    # Attente de la durée spécifiée
+    sleep $((windowTime / 1000))
+
+    # Lecture finale des temps CPU
+    stat_content2=$(<"$stat_file")
+    utime2=$(echo "$stat_content2" | awk '{print $14}')
+    stime2=$(echo "$stat_content2" | awk '{print $15}')
+
+    # Calcul de l'utilisation du CPU
+    cpu_usage=$((utime2 + stime2 - utime1 - stime1))
+    cpu_usage_seconds=$(echo "scale=2; $cpu_usage / $hz" | bc)
+    cpu_usage_percentage=$(echo "scale=2; $cpu_usage_seconds / ($windowTime / 1000) * 100" | bc)
+
+    echo "$cpu_usage_percentage"
 }
 
 # Fonction pour obtenir le TDP, indicateur de la capacité maximale
