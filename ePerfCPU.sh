@@ -56,20 +56,29 @@ get_cpu_frequency() {
 #pour une mesure statique : sudo dmidecode -t processor (pour obtenir spécification standard du fabriquant)
 
 get_cpu_voltage() {
+    # Vérifier si les msr-tools sont installées. Si non, les installer.
+    if ! command -v rdmsr &> /dev/null; then
+        echo "msr-tools n'est pas installé. Installation en cours..."
+        sudo apt-get update && sudo apt-get install -y msr-tools
+        if [ $? -ne 0 ]; then
+            echo "Erreur lors de l'installation des msr-tools. Assurez-vous que votre système peut les installer."
+            return 1
+        fi
+    fi
+
     # On s'assure d'abord que le module 'msr' est chargé
     if ! lsmod | grep -q msr; then
         echo "Le module MSR n'est pas chargé. Exécutez 'sudo modprobe msr'."
         return 1
     fi
 
-    # On lire la tension à partir des registres MSR
-    # Rmq: l'adresse du registre MSR peut varier selon le processeur
+    # Lire la tension à partir des registres MSR
     msr_voltage=$(sudo rdmsr -f 47:32 -d 0x198)
 
     # Conversion en volts
     voltage=$(echo "scale=3; $msr_voltage / 8192" | bc)
 
-    # On ajoute un zéro devant si le nombre commence par un point car la syntaxe bash par defaut pour les decimaux est .8 pour 0.8
+    # Ajouter un zéro devant si le nombre commence par un point
     if [[ $voltage == .* ]]; then
         voltage="0$voltage"
     fi
