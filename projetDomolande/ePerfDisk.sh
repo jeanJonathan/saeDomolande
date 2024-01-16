@@ -45,7 +45,7 @@ get_disk_transfer_rate() {
 get_disk_power() {
     # Placeholder - adapt this based on your system's capabilities or use external tools
     # For demonstration purposes, we assume a constant power value.
-    echo "0.5"
+    echo "7"
 }
 
 # Fonction qui calcule la consommation d'énergie du disque
