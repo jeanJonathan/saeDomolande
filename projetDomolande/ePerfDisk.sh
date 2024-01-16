@@ -19,7 +19,7 @@
 # Calcul de la consommation d'énergie avec Powertop : https://unix.stackexchange.com/questions/1406/is-there-a-tool-that-can-provide-gui-i-e-visual-power-usage-reports-for-ubuntu
 # Gestion et surveillance de la consommation d'énergie : https://linuxconfig.org/how-to-check-and-tune-power-consumption-with-powertop-on-linux
 #================================================================
-sudo hdparm -I /dev/sdX
+sudo hdparm -I /dev/sda
 
 device=""
 windowTime=0
