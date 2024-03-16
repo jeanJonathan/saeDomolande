@@ -30,7 +30,7 @@
 
 
 pid=0
-windowTime=0
+windowTime=1000 # valeur de mesure par defaut
 
 cpu_energy=0
 cpu_power_AVG=0
@@ -152,6 +152,15 @@ get_cpu_tdp() {
     fi
 }
 
+# Fonction pour surveiller et calculer continuellement la consommation d'énergie et la puissance du CPU
+monitor_and_calculate_energy_continuously() {
+    while [ -e "/proc/$pid" ]; do
+        getCPUCons
+        sleep $((windowTime / 1000)) # On ajoute une pause entre les mesures, ajustez selon le besoin
+    done
+
+    echo "Le processus $pid a terminé son exécution."
+}
 
 
 #Fonction pour gerer les options de la ligne de commande duree de surveillance avec wnidowTime par exp
@@ -252,7 +261,7 @@ verifyPrintOutput() {
 main() {
     getInput "$@"
     verifyInput
-    getCPUCons
+    monitor_and_calculate_energy_continuously
     verifyPrintOutput
 }
 

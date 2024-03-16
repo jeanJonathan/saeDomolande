@@ -49,7 +49,7 @@ getInput() {
     done
 }
 
-# Exécution de la commande perf et extraction des données
+# Fonctino pour exécution de la commande perf et extraction des données
 execute_perf() {
 
     # Vérification de l'installation de perf
