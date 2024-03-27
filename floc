@@ -1,0 +1,43 @@
+#!/bin/bash
+
+
+getInput() {
+
+# Traitement des arguments de la ligne de commande
+while getopts "a:n:i:" opt; do
+    case ${opt} in
+        a) app=$OPTARG ;;
+        n ) processName=$OPTARG ;;
+        i ) interval=$OPTARG ;;
+        \? ) "Usage: cmd -a [NIC ou DISK ou ALL] -n [NOM DU PROCESSUS] -i [INTERVAL]" ;;
+    esac
+    
+        echo $n
+        
+
+done
+if [ "$app" = "NIC" ]; then
+        echo "Exécution de ePerfNIC pour le processus '$processName' avec un intervalle de $interval secondes."
+            ./ePerfNIC.sh -n "$processName" -i "$interval"
+    elif [ "$app" = "DISK" ]; then
+        echo "Exécution de ePerfDISK pour le processus '$processName' avec un intervalle de $interval secondes."
+            ./ePerfDISK.sh -n "$processName" -i "$interval"
+    elif [ "$app" = "ALL" ]; then
+         sudo echo "Exécution de ePerfDISK et ePerfNIC pour le processus '$processName' avec un intervalle de $interval secondes."
+         
+            ./ePerfDISK.sh -n "$processName" -i "$interval" &
+            ./ePerfNIC.sh -n "$processName" -i "$interval" &
+    else
+        echo "Option invalide : doit être NIC ou DISK"
+        exit 1
+    fi
+}
+
+
+
+main() {
+    getInput "$@"
+}
+
+# Appel de la fonction principale
+main "$@"

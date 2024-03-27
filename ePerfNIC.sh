@@ -1,272 +1,190 @@
 #!/bin/bash
 
-# ================================================================
-# Auteur : 
-# Date de création : 
-# Script Name: ePerfNIC.sh
-# Description: This script calculates a PID's NIC power consumption.
-# From variables: PID transfer rate and NIC MAX transfer rate
-# Usage: ePerfNIC.sh -p PID -t windowTime milliseconds
-# Note: A safe windowTime is 100 msecs, otherwise empty values may exist
-    #WARN: Lower values make the script calculate low initial values
-# Important REFs and values for the NIC: 
-  # source to intel confidential (?) sheet specs: 
-  #https://www.tonymacx86.com/attachments/cnvi-and-9560ngw-documentation-pdf.342854/
-  #https://fccid.io/B94-9560D2WZ/User-Manual/Users-Manual-3800018.pdf
 
-  #Power TpT – 11n HB-40 Rx 11n (at max TpT) 550 mW
-  #TpT – 11ac HB-80 Tx 11ac (at max TpT) 1029 mW
+# Configuration de trap pour appeler force_stop lors de la réception de SIGINT
+trap force_stop SIGINT
+stop=false
 
-  #11ac 160 MHz 2SS Rx Conductive, best attenuation, TCP/IP 1204 Mbps - 150500 KBps
-  #11ac 160 MHz 2SS TX Conductive, best attenuation, TCP/IP 1220 Mbps - 152500 KBps
-# NIC_INFO: the intel 6 AX201 has Capabilities: [c8] Power Management version 3 (lspci -v)
-#...we can custom it depending on the kernel driver for further optimizations
-# ================================================================
+# Function to check if the process is running and get its PID
+check_process_running() {
+    
+    while true; do
+        # Utiliser pgrep pour trouver le PID du processus par son nom
+        pid_pere=$(pgrep "$processName")
 
-pid=0
-windowTime=0
-
-
-# On calcule la fréquence moyenne du processeur en lisant /proc/cpuinfo.
-get_process_name() {
-    pid=$1
-    process_name=$(ps -p $pid -o comm=)
-    echo $process_name
-}
-
-# Identifie automatiquement l'interface réseau active utilisée par le processus.
-getNICInterface() # Cette commande affiche les connexes réseau associées à un processus donné
-    # Assurez-vous que netstat est installé
-    if ! command -v netstat &> /dev/null; then
-        echo "netstat n'est pas installé. Installation en cours..."
-        sudo apt-get update && sudo apt-get install -y net-tools
-        if [ $? -ne 0 ]; then
-            echo "Erreur lors de l'installation de net-tools."
-            exit 1
-        fi
-    fi
-
-    # Obtenez le PID du processus
-    local process_pid=$1
-
-    # Vérifiez si le PID est fourni
-    if [ -z "$process_pid" ]; then
-        echo "PID non fourni pour la fonction getNICInterface."
-        return 1
-    fi
-
-    # Utilisez netstat pour trouver l'interface réseau utilisée par le processus
-    local nic_interface=$(netstat -ie | grep -B1 "$(netstat -tunp | grep $process_pid/ | awk '{print $5}' | cut -d: -f1 | sort | uniq)" | head -n1 | awk '{print $1}')
-
-    # Vérifiez si une interface a été trouvée
-    if [ -z "$nic_interface" ]; then
-        echo "Aucune interface réseau trouvée pour le PID $process_pid."
-        return 1
-    else
-        echo "Interface réseau trouvée pour le PID $process_pid : $nic_interface"
-    fi
-}
-
-
-# Mesure les taux de téléchargement et d'envoi du processus spécifié.
-# rmq : nethogs, est un outil de suivi de la consommation de bande passante par processus.
-# N.B : aucun de ces outils ne fournit directement le taux de téléchargement et d'envoi pour un PID 
-# spécifique de manière simple. Les solutions nécessitent donc un certain niveau de manipulation de données.
-getNICUsage() {
-    # Assurez-vous que nethogs est installé
-    if ! command -v nethogs &> /dev/null; then
-        echo "nethogs n'est pas installé. Installation en cours..."
-        sudo apt-get update && sudo apt-get install -y nethogs
-        if [ $? -ne 0 ]; then
-            echo "Erreur lors de l'installation de nethogs."
-            exit 1
-        fi
-    fi
-
-    # Obtenez le PID du processus
-    local process_pid=$1
-
-    # Vérifiez si le PID est fourni
-    if [ -z "$process_pid" ]; then
-        echo "PID non fourni pour la fonction getNICUsage."
-        return 1
-    fi
-
-    # Utilisez nethogs pour capturer le trafic réseau du processus
-    nethogs_output=$(timeout 5 sudo nethogs -t -c 10 | grep $process_pid)
-
-    # Extraire les taux de téléchargement et d'envoi
-    download_rate=$(echo "$nethogs_output" | awk '{print $2}')
-    upload_rate=$(echo "$nethogs_output" | awk '{print $3}')
-
-    # Affichez les résultats
-    echo "Taux de téléchargement pour le PID $process_pid : $download_rate KBps"
-    echo "Taux d'envoi pour le PID $process_pid : $upload_rate KBps"
-}
-
-# Calcule l'énergie consommée par la NIC sur la période spécifiée.
-calculateNICEnergy() {
-    # Puissance moyenne consommée par la NIC en milliwatts (mW)
-    local nic_power_avg=$1
-
-    # Durée pendant laquelle la puissance est consommée en millisecondes (ms)
-    local time_period_ms=$2
-
-    # Vérifiez si la puissance et le temps sont fournis
-    if [ -z "$nic_power_avg" ] || [ -z "$time_period_ms" ]; then
-        echo "La puissance moyenne et/ou la période de temps ne sont pas fournis."
-        return 1
-    fi
-
-    # Conversion de la période de temps en secondes (1 seconde = 1000 millisecondes)
-    local time_period_s=$(echo "scale=3; $time_period_ms / 1000" | bc)
-
-    # Calcul de l'énergie en joules (1 watt = 1 joule par seconde; 1 mW = 0.001 watts)
-    local nic_energy=$(echo "scale=3; $nic_power_avg * 0.001 * $time_period_s" | bc)
-
-    echo "Énergie consommée par la NIC : $nic_energy joules"
-}
-
-# Récupère les spécifications de la carte réseau (puissance et taux de transfert max).
-getNICSpecifications() {
-    # Utilisation de lshw pour obtenir des informations sur la carte réseau
-    nic_info=$(sudo lshw -class network)
-
-    # Vérification si lshw a fourni les informations nécessaires
-    if [ -n "$nic_info" ]; then
-        echo "Informations NIC trouvées avec lshw:"
-        echo "$nic_info"
-        return 0
-    fi
-
-    # Utilisation de lspci pour obtenir des informations sur la carte réseau
-    nic_info=$(sudo lspci | grep -i network)
-
-    # Vérification si lspci a fourni les informations nécessaires
-    if [ -n "$nic_info" ]; then
-        echo "Informations NIC trouvées avec lspci:"
-        echo "$nic_info"
-        return 0
-    fi
-
-    # Utilisation de ethtool pour obtenir des informations sur les capacités de la carte réseau
-    nic_interfaces=$(ip link show | awk -F: '$0 !~ "lo|vir|^[^0-9]"{print $2;getline}')
-    for iface in $nic_interfaces; do
-        nic_info=$(ethtool $iface)
-        if [ -n "$nic_info" ]; then
-            echo "Informations NIC pour l'interface $iface trouvées avec ethtool:"
-            echo "$nic_info"
+        if [ -n "$pid_pere" ]; then
+            pids=$(pgrep -f "$processName")
+            echo "Le processus '$processName' a démarré avec le PID $pid_pere."
+            break  # Sortir de la boucle si le processus est trouvé
+        else
+            echo "Le processus '$processName' n'est pas encore démarré. Réessai dans $interval secondes..."
+            sleep "$interval"
         fi
     done
 
-    # Utilisation de rfkill pour obtenir des informations sur les dispositifs sans fil
-    rfkill_info=$(rfkill list)
-    if [ -n "$rfkill_info" ]; then
-        echo "Informations sur les dispositifs sans fil trouvées avec rfkill:"
-        echo "$rfkill_info"
-    fi
+    
+    
 }
 
 
-#Fonction pour gerer les options de la ligne de commande duree de surveillance avec wnidowTime par exp
+force_stop(){
+    stop=true
+}
+
+
+# Fonction pour vérifier si le processus avec le PID spécifié est en cours d'exécution
+is_process_running() {
+    ps -p $1 > /dev/null 2>&1
+    return $?
+}
+# Fonction pour collecter les données
+data_collect() {
+
+    pid_array=($pids)
+    pid_initial=($pids)
+    pid_liste=($pid_pere)
+    pid=$pid_liste
+
+        #echo "Traitement en cours..."
+
+        # Vérifie si le processus est toujours en cours d'exécution
+        if ! is_process_running $pid; then
+            #echo "Le processus avec le PID $pid n'est plus en cours d'exécution."
+            continue
+        fi
+
+        if ! $stop; then
+                continue
+        fi
+
+        # Capture du temps de début
+        start_time=$(date +%s)
+
+        # Nom des fichiers pour les données brutes et filtrées
+        rawOutputFile="nethogs_raw_$pid.txt"
+        filteredOutputFile="nethogs_filtered_$pid.txt"
+
+        # Suppression des fichiers s'ils existent, pour s'assurer qu'ils sont recréés
+        rm -f $rawOutputFile $filteredOutputFile
+
+        # Exécution de nethogs pour le PID actuel en arrière-plan
+        sudo nethogs -a -t -d $interval> $rawOutputFile &
+        nethogs_pid=$!
+        echo "Le programme est en cours d'execution..."
+
+        # Boucle de surveillance pour arrêter nethogs si le processus n'est plus en cours d'exécution
+        while is_process_running $pid; do
+            sleep 1
+        done
+
+        # Arrêt de nethogs lorsque le processus surveillé se termine
+        kill $nethogs_pid
+
+        # Capture du temps de fin et calcul de la durée
+        end_time=$(date +%s)
+        duration=$((end_time - start_time))
+
+        #echo "Le processus $pid a tourné pendant $duration secondes depuis le début du tracking."
+
+       for pidCalcul in "${pid_initial[@]}"; do
+                grep "$pidCalcul" $rawOutputFile >> $filteredOutputFile
+            done
+
+        calculateNICEnergy
+    
+}
+
+
+
+
+# Fonction pour calculer l'énergie consommée par les activités disque
+calculateNICEnergy() {
+
+    if [ ! -f ./nicParam.conf ]; then
+    echo "Le fichier de configuration n'a pas été trouvé."
+    exit 1
+    fi
+    source ./nicParam.conf
+    # Initialisation des variables pour les lectures et écritures disque
+    # Initialisation des variables pour le trafic envoyé et reçu
+totalSent=0
+totalReceived=0
+
+max_download_power=0.55
+max_upload_power=1.029
+max_download_rate=150500
+max_upload_rate=152500
+
+
+    # Nom du fichier contenant les données filtrées
+filteredOutputFile="nethogs_filtered_$pid.txt"
+
+    # Lecture du fichier ligne par ligne
+while IFS= read -r line; do
+    # Extraction des valeurs de trafic envoyé et reçu à partir de la ligne
+    # Supposons que le format soit 'PID User Program Sent Received'
+    # Ajustez les positions (awk '{print $X}') selon votre format de sortie spécifique
+    sent=$(echo $line | awk '{print $(NF-1)}')
+    received=$(echo $line | awk '{print $NF}')
+    count=$(echo "$count + 1" | bc  2>/dev/null) 
+
+     # Conversion des valeurs en nombres et ajout aux totaux
+    totalSent=$(echo "$totalSent + $sent" | bc 2>/dev/null)
+    totalReceived=$(echo "$totalReceived + $received" | bc  2>/dev/null)
+
+done < "$filteredOutputFile"
+
+   #from internet
+   
+
+    upload_power=$(echo "scale=10;$max_upload_power*($totalSent / $max_upload_rate)" | bc  2>/dev/null)
+    download_power=$(echo "scale=10;$max_download_power*($totalReceived / $max_download_rate)"| bc  2>/dev/null)
+
+    nic_power_AVG=$(echo  "scale=10;$upload_power + $download_power" | bc  2>/dev/null)
+    nic_energy=$(echo "scale=10;$nic_power_AVG*$duration*0.001" | bc  2>/dev/null)
+
+    echo "Total des données envoyées: $totalSent KB"
+    echo "Total des données reçus: $totalReceived KB"
+    echo "Consommation energétique de la carte réseau en J": $nic_energy
+    echo "Consommation energétique de la carte réseau en W": $nic_power_AVG
+
+    
+
+   
+
+
+}
+
+
+
+# Fonction pour gérer les options de la ligne de commande
 getInput() {
-    while getopts "t:p:" opt; do
-        case ${opt} in
-            t ) windowTime=$OPTARG ;;
-            p ) pid=$OPTARG ;;
-            \? ) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
-            : ) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
+    while getopts "n:i:" opt; do
+        case $opt in
+            n) processName=$OPTARG ;;
+            i) interval=$OPTARG ;;
+            \?) echo "Usage: cmd [-n] process_name [-i] interval" ;;
         esac
     done
 }
 
 
-#Fonction pour calculer la consommation d'énergie du processus spécifié en multipliant l'utilisation du CPU, 
-#la fréquence et la tension, puis en moyennant ces valeurs sur la période spécifiée 
 
-getNICCons() {
-    # Récupération du nom du processus
-    process_name=$(get_process_name $pid)
-
-    # Identification de l'interface réseau utilisée par le processus
-    nic_interface=$(getNICInterface $pid)
-    if [ -z "$nic_interface" ]; then
-        echo "Aucune interface réseau trouvée pour le PID $pid."
-        # Si l'interface réseau n'est pas trouvée, on termine la fonction
-        return 1
-    fi
-
-    # Récupération des taux de téléchargement et d'envoi du processus spécifié
-    getNICUsage $pid
-    if [ -z "$download_rate" ] || [ -z "$upload_rate" ]; then
-        echo "Taux de téléchargement et d'envoi non disponibles pour le PID $pid."
-        return 1
-    fi
-
-    # Récupération des taux de téléchargement et d'envoi
-    getNICUsage $pid
-    upload_rate_avg=$upload_rate
-    download_rate_avg=$download_rate
-
-    # Récupération des spécifications de la carte réseau
-    getNICSpecifications
-    # Les variables 'max_download_power', 'max_upload_power', 'max_download_rate', 'max_upload_rate' sont définies ici
-
-    # Calcul de la puissance consommée par la NIC pour le téléchargement et l'envoi
-    
-    upload_power=$(echo "scale=10; $max_upload_power * ($upload_rate_avg / $max_upload_rate)" | bc)
-    download_power=$(echo "scale=10; $max_download_power * ($download_rate_avg / $max_download_rate)" | bc)
-
-    # Calcul de la puissance moyenne consommée par la NIC
-    nic_power_avg=$(echo "scale=10; ($upload_power + $download_power) / 2" | bc)
-
-    # Calcul de l'énergie consommée par la NIC
-    nic_energy=$(calculateNICEnergy $nic_power_avg $windowTime)
-
-    # Vérifiez si la fonction calculateNICEnergy a réussi
-    if [ -z "$nic_energy" ]; then
-        echo "Erreur lors du calcul de l'énergie consommée par la NIC."
-        return 1
-    fi
-
-    # Affichage des résultats
-    echo "Processus: $process_name"
-    echo "Interface NIC: $nic_interface"
-    echo "Taux de téléchargement moyen: $download_rate_avg KBps"
-    echo "Taux d'envoi moyen: $upload_rate_avg KBps"
-    echo "Puissance moyenne consommée par la NIC : $nic_power_avg mW"
-    echo "Énergie consommée par la NIC : $nic_energy joules"
-}
-
-#Fonction pour verifier et valider les entrees de windowTime et pid
-verifyInput() {
-    if [ $windowTime -lt 100 ]; then
-        echo "I need a bigger windowTime :(..."; exit
-    fi
-    if [ ! -e "/proc/$pid/stat" ]; then
-        echo "Non-existent PID"; exit
-    fi
-}
-
-
-#Fonction pour Afficher l'énergie consommée et la puissance moyenne
-verifyPrintOutput()
-{   #verify if it's a non empty numerical value  
-  if [[ ! -z $nic_energy ]] && \
-     [[ $nic_energy =~ ^[0-9]*([.][0-9]+)?$ ]] && \
-     [[ ! -z $nic_power_AVG ]] && \
-     [[ $nic_power_AVG =~ ^[0-9]*([.][0-9]+)?$ ]]; then
-
-        echo nic_energy_J: $nic_energy
-        echo nic_avgPower_W: $nic_power_AVG
-  else
-        echo error somewhere
-    fi
-}
-# Orchestre l'exécution des méthodes pour le calcul de la consommation d'énergie.
+# Fonction principale pour orchestrer le script
 main() {
     getInput "$@"
-    verifyInput
-    getCPUCons
-    verifyPrintOutput
+    sudo echo "Authentification réussie"
+       check_process_running "processName"
+
+    data_collect
+       
+    
+    
+    find . -type f -name '*nethogs_raw*' | xargs rm -f
+    find . -type f -name '*nethogs_filtered*' | xargs rm -f
+
+
 }
+
+# Appel de la fonction principale
+main "$@"

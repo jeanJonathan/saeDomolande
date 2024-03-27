@@ -152,17 +152,6 @@ get_cpu_tdp() {
     fi
 }
 
-# Fonction pour surveiller et calculer continuellement la consommation d'énergie et la puissance du CPU
-monitor_and_calculate_energy_continuously() {
-    while [ -e "/proc/$pid" ]; do
-        getCPUCons
-        sleep $((windowTime / 1000)) # On ajoute une pause entre les mesures, ajustez selon le besoin
-    done
-
-    echo "Le processus $pid a terminé son exécution."
-}
-
-
 #Fonction pour gerer les options de la ligne de commande duree de surveillance avec wnidowTime par exp
 getInput() {
     while getopts "t:p:" opt; do
@@ -261,7 +250,7 @@ verifyPrintOutput() {
 main() {
     getInput "$@"
     verifyInput
-    monitor_and_calculate_energy_continuously
+    getCPUCons
     verifyPrintOutput
 }
 
